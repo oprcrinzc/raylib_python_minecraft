@@ -16,6 +16,21 @@ rl.set_config_flags(
 rl.init_window(1920, 1080, "3d")
 rl.set_target_fps(144)
 
+
+class block:
+    type = ""
+    width = 1.0
+    height = 1.0
+    long = 1.0
+
+    def __init__(self, t: str) -> None:
+        self.type = t
+
+
+b = block("grass")
+
+chunk = {0: {0: {0: b, 1: b, 3: b}}}
+
 playerPos = rl.Vector3(0, 20, 0)
 playerAngleY = 0.0  # degree, rotation of axis y
 playerAngleX = 0.0  # degree, rotation of axis x
@@ -32,7 +47,7 @@ g = 9.80665
 target = rl.Vector3(playerRadius, playerPos.y, 0.0)
 # target = rl.Vector3(playerRadius, playerPos.y, 0.0)
 
-mainCam = rl.Camera3D(playerPos, target, rl.Vector3(0.0, 1.0, 0.0), 50.0, 0)
+mainCam = rl.Camera3D(playerPos, target, rl.Vector3(0.0, 1.0, 0.0), 55.0, 0)
 
 timeNowJump = 0.0
 timeLastJump = 0.0
@@ -49,6 +64,7 @@ def UpdatePlayer():
     Movement()
     PlayerPhysicSystem()
     mainCam.position = playerPos
+    mainCam.position.y = mainCam.position.y + 1.7
 
 
 def Movement():
@@ -72,7 +88,7 @@ def Movement():
 
     if rl.is_key_down(rl.KeyboardKey.KEY_SPACE):
         timeNowJump = time.perf_counter()
-        if timeNowJump - timeLastJump > 0.25 and playerPos.y <= 1.70000005:
+        if timeNowJump - timeLastJump > 0.25 and playerPos.y == playerMinY:
             AddAcceleration(rl.Vector3(0.0, 22.5, 0.0), 0.25)
             timeLastJump = timeNowJump
         # vf = rl.Vector3(0.0, 15.0 * rl.get_frame_time(), 0.0)
@@ -140,10 +156,10 @@ def Gravity():
 
     # netVel = rl.Vector3(0.0, 0.0, 0.0)
     # v = u + at
-    if playerPos.y <= 1.7:
+    if playerPos.y <= playerMinY:
         playerVelocity.y = 0
 
-    if playerPos.y > 1.7:
+    if playerPos.y > playerMinY:
         v = playerVelocity.y - (g * t_g)
         playerVelocity.y = v
 
@@ -155,8 +171,28 @@ def AddAcceleration(a: rl.Vector3, t):
     playerVelocity = v
 
 
+def FindGround(stack: int = 0):
+    pX, pY, pZ = (
+        math.floor(playerPos.x),
+        math.floor(playerPos.y),
+        math.floor(playerPos.z),
+    )
+    global playerMinY
+    if stack > 5:
+        return
+    try:
+        block = chunk[pX][pY - stack][pZ]
+        playerMinY = pY - stack
+
+    except:
+        playerMinY = -1
+        FindGround(stack + 1)
+
+
 def PlayerPhysicSystem():
-    global playerPos, playerVelocity
+    global playerPos, playerVelocity, playerMinY
+
+    FindGround()
 
     # update position
     playerPos.x += playerVelocity.x * rl.get_frame_time()
@@ -165,9 +201,31 @@ def PlayerPhysicSystem():
 
     # if playerPos.y >= 1.7 - 0.000001 and playerPos.y <= 1.7 + 0.000001:
     #    playerPos.y = 1.7
-    if playerPos.y < 1.70000005 and playerPos.y != 1.700:
-        playerPos.y = 1.7
+    if playerPos.y < playerMinY and playerPos.y != playerMinY:
+        playerPos.y = playerMinY
         playerVelocity.y = 0
+
+
+chunkLoad = False
+
+
+def UpdateChunk():
+    global chunkLoad
+    for x in range(40):
+        for y in range(40):
+            for z in range(40):
+                try:
+                    block = chunk[x][y][z]
+                    rl.draw_cube(
+                        rl.Vector3(x + 0.5, y, z + 0.5),
+                        block.width,
+                        block.height,
+                        block.long,
+                        rl.GREEN,
+                    )
+                except:
+                    pass
+    chunkLoad = True
 
 
 rl.disable_cursor()
@@ -175,9 +233,12 @@ rl.disable_cursor()
 while not rl.window_should_close():
     rl.begin_drawing()
     rl.clear_background(rl.DARKBLUE)
+    # rl.rl_clear_screen_buffers()
     rl.draw_fps(40, 40)
-    rl.draw_text("vY:" + str(playerVelocity.y), 40, 70, 30, rl.BLACK)
-    rl.draw_text("aX:" + str(playerAngleX), 40, 100, 30, rl.BLACK)
+    rl.draw_text("X:" + str(math.floor(playerPos.x)), 40, 70, 30, rl.BLACK)
+    rl.draw_text("Y:" + str(math.floor(playerPos.y)), 40, 100, 30, rl.BLACK)
+    rl.draw_text("Z:" + str(math.floor(playerPos.z)), 40, 130, 30, rl.BLACK)
+    rl.draw_text("minY:" + str(playerMinY), 40, 160, 30, rl.BLACK)
     Gravity()
     UpdatePlayer()
     UpdateCamera()
@@ -189,6 +250,8 @@ while not rl.window_should_close():
     rl.draw_cube(rl.Vector3(0, 1, 10), 1, 1, 1, rl.RED)
     rl.draw_cube(rl.Vector3(-10, 1, 0), 1, 1, 1, rl.GREEN)
     rl.draw_cube(rl.Vector3(0, 1, -10), 1, 1, 1, rl.WHITE)
+
+    UpdateChunk()
 
     rl.draw_sphere(rl.Vector3(target.x, target.y, target.z), 0.05, rl.RED)
 
