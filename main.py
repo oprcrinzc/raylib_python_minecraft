@@ -1,7 +1,10 @@
+import re
 import pyray as rl
 import math
+import time
 
 # import raylib as rl
+from raylib import Vector3Multiply
 import raylib.defines
 
 rl.set_config_flags(
@@ -18,25 +21,38 @@ playerAngleY = 0.0  # degree, rotation of axis y
 playerAngleX = 0.0  # degree, rotation of axis x
 playerRadius = 5.0
 playerSpeed = 2.0
+playerMinY = 0.0
+playerMass = 5.0
+playerVelocity = rl.Vector3(0, 0, 0)
+playerAcceleration = rl.Vector3(0, 0, 0)
+
+t_g = 0.01
+g = 9.80665
 
 target = rl.Vector3(playerRadius, playerPos.y, 0.0)
 # target = rl.Vector3(playerRadius, playerPos.y, 0.0)
 
-mainCam = rl.Camera3D(playerPos, target, rl.Vector3(0.0, 1.0, 0.0), 30.0, 0)
+mainCam = rl.Camera3D(playerPos, target, rl.Vector3(0.0, 1.0, 0.0), 50.0, 0)
+
+timeNowJump = 0.0
+timeLastJump = 0.0
 
 
 def UpdatePlayer():
     global target, mainCam, playerAngleY, playerAngleX
     if playerAngleY > 360 or playerAngleY < -360:
         playerAngleY = 0.0
-    if playerAngleX > 360 or playerAngleX < -360:
-        playerAngleX = 0.0
+    if playerAngleX >= 87:
+        playerAngleX = 87
+    if playerAngleX <= -87:
+        playerAngleX = -87
     Movement()
+    PlayerPhysicSystem()
     mainCam.position = playerPos
 
 
 def Movement():
-    global playerPos, target, mainCam
+    global playerPos, target, mainCam, timeNowJump, timeLastJump
 
     vM = rl.Vector3(0.0, 0.0, 0.0)
     vX, vZ = 0.0, 0.0
@@ -51,8 +67,15 @@ def Movement():
     if rl.is_key_down(rl.KeyboardKey.KEY_A):
         vM.z += -1
 
+    if rl.is_key_down(rl.KeyboardKey.KEY_T):
+        playerPos.y = 100
+
     if rl.is_key_down(rl.KeyboardKey.KEY_SPACE):
-        vf = rl.Vector3(0.0, 15.0 * rl.get_frame_time(), 0.0)
+        timeNowJump = time.perf_counter()
+        if timeNowJump - timeLastJump > 0.25 and playerPos.y <= 1.70000005:
+            AddAcceleration(rl.Vector3(0.0, 22.5, 0.0), 0.25)
+            timeLastJump = timeNowJump
+        # vf = rl.Vector3(0.0, 15.0 * rl.get_frame_time(), 0.0)
 
     vZrl = math.sin(raylib.defines.DEG2RAD * (playerAngleY + 90)) * rl.get_frame_time()
     vXrl = math.cos(raylib.defines.DEG2RAD * (playerAngleY + 90)) * rl.get_frame_time()
@@ -113,13 +136,38 @@ def UpdateCamera():
 
 
 def Gravity():
-    global playerPos, target, mainCam
-    targetPos = 0.0
+    global playerVelocity, playerPos
+
+    # netVel = rl.Vector3(0.0, 0.0, 0.0)
+    # v = u + at
+    if playerPos.y <= 1.7:
+        playerVelocity.y = 0
+
     if playerPos.y > 1.7:
-        targetPos += playerPos.y - (9.8 * rl.get_frame_time())
-    if targetPos <= 1.7:
-        targetPos = 1.7
-    playerPos.y = targetPos
+        v = playerVelocity.y - (g * t_g)
+        playerVelocity.y = v
+
+
+def AddAcceleration(a: rl.Vector3, t):
+    global playerVelocity
+    # v = u + at
+    v = rl.vector3_add(playerVelocity, rl.vector3_multiply(a, rl.Vector3(t, t, t)))
+    playerVelocity = v
+
+
+def PlayerPhysicSystem():
+    global playerPos, playerVelocity
+
+    # update position
+    playerPos.x += playerVelocity.x * rl.get_frame_time()
+    playerPos.y += playerVelocity.y * rl.get_frame_time()
+    playerPos.z += playerVelocity.z * rl.get_frame_time()
+
+    # if playerPos.y >= 1.7 - 0.000001 and playerPos.y <= 1.7 + 0.000001:
+    #    playerPos.y = 1.7
+    if playerPos.y < 1.70000005 and playerPos.y != 1.700:
+        playerPos.y = 1.7
+        playerVelocity.y = 0
 
 
 rl.disable_cursor()
@@ -128,7 +176,7 @@ while not rl.window_should_close():
     rl.begin_drawing()
     rl.clear_background(rl.DARKBLUE)
     rl.draw_fps(40, 40)
-    rl.draw_text("aY:" + str(playerAngleY), 40, 70, 30, rl.BLACK)
+    rl.draw_text("vY:" + str(playerVelocity.y), 40, 70, 30, rl.BLACK)
     rl.draw_text("aX:" + str(playerAngleX), 40, 100, 30, rl.BLACK)
     Gravity()
     UpdatePlayer()
