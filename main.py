@@ -29,14 +29,29 @@ class block:
 
 b = block("grass")
 
-chunk = {0: {0: {0: b, 1: b, 3: b}}}
+chunk = {
+    (0, 0, 0): b,
+    (1, 0, 0): b,
+    (0, 0, 1): b,
+    (0, 0, 3): b,
+    (2, 1, 0): b,
+    (3, -1, 0): b,
+    (3, -1, 1): b,
+    (2, -1, 1): b,
+}
 
 playerPos = rl.Vector3(0, 20, 0)
 playerAngleY = 0.0  # degree, rotation of axis y
 playerAngleX = 0.0  # degree, rotation of axis x
 playerRadius = 5.0
 playerSpeed = 2.0
+
+playerMinX = -100
+playerMaxX = 100
 playerMinY = 0.0
+playerMinZ = -100
+playerMaxZ = 100
+
 playerMass = 5.0
 playerVelocity = rl.Vector3(0, 0, 0)
 playerAcceleration = rl.Vector3(0, 0, 0)
@@ -89,7 +104,7 @@ def Movement():
     if rl.is_key_down(rl.KeyboardKey.KEY_SPACE):
         timeNowJump = time.perf_counter()
         if timeNowJump - timeLastJump > 0.25 and playerPos.y == playerMinY:
-            AddAcceleration(rl.Vector3(0.0, 22.5, 0.0), 0.25)
+            AddAcceleration(rl.Vector3(0.0, 25.5, 0.0), 0.25)
             timeLastJump = timeNowJump
         # vf = rl.Vector3(0.0, 15.0 * rl.get_frame_time(), 0.0)
 
@@ -171,6 +186,89 @@ def AddAcceleration(a: rl.Vector3, t):
     playerVelocity = v
 
 
+def FindXPositive(stack: int = 1):
+    pX, pY, pZ = (
+        math.floor(playerPos.x),
+        math.floor(playerPos.y),
+        math.floor(playerPos.z),
+    )
+    global playerMaxX
+    if stack > 6:
+        return
+    block = chunk.get((pX + stack, pY, pZ))
+    if block is not None:
+        # print("XP" + str(stack))
+        playerMaxX = pX + stack - 0.00001
+    else:
+        playerMaxX = 100
+        FindXPositive(stack + 1)
+
+
+def FindXNegative(stack: int = 1):
+    pX, pY, pZ = (
+        math.floor(playerPos.x),
+        math.floor(playerPos.y),
+        math.floor(playerPos.z),
+    )
+    global playerMinX
+    if stack > 6:
+        return
+    block = chunk.get((pX - stack, pY, pZ))
+    if block is not None:
+        # print("XN" + str(stack))
+        playerMinX = pX - stack + block.width
+    else:
+        playerMinX = -100
+        FindXNegative(stack + 1)
+
+
+def FindZPositive(stack: int = 1):
+    pX, pY, pZ = (
+        math.floor(playerPos.x),
+        math.floor(playerPos.y),
+        math.floor(playerPos.z),
+    )
+    global playerMaxZ
+    if stack > 6:
+        return
+    block = chunk.get((pX, pY, pZ + stack))
+    if block is not None:
+        # print("ZP" + str(stack))
+        playerMaxZ = pZ + stack - 0.00001
+    else:
+        playerMaxZ = 100
+        FindZPositive(stack + 1)
+
+
+def FindZNegative(stack: int = 1):
+    pX, pY, pZ = (
+        math.floor(playerPos.x),
+        math.floor(playerPos.y),
+        math.floor(playerPos.z),
+    )
+    global playerMinZ
+    if stack > 6:
+        return
+
+    block = chunk.get((pX, pY, pZ - stack))
+
+    if block is not None:
+        # print("ZN" + str(stack))
+        playerMinZ = pZ - stack + block.long
+
+    else:
+        playerMinZ = -100
+        FindZNegative(stack + 1)
+
+
+def FindAround():
+    FindXPositive()
+    FindXNegative()
+    FindZPositive()
+    FindZNegative()
+    # print("find")
+
+
 def FindGround(stack: int = 0):
     pX, pY, pZ = (
         math.floor(playerPos.x),
@@ -180,19 +278,17 @@ def FindGround(stack: int = 0):
     global playerMinY
     if stack > 5:
         return
-    try:
-        block = chunk[pX][pY - stack][pZ]
-        playerMinY = pY - stack
 
-    except:
+    block = chunk.get((pX, pY - stack - 1, pZ))
+    if block is None:
         playerMinY = -1
         FindGround(stack + 1)
+    else:
+        playerMinY = block.height + (pY - 1) - stack
 
 
 def PlayerPhysicSystem():
     global playerPos, playerVelocity, playerMinY
-
-    FindGround()
 
     # update position
     playerPos.x += playerVelocity.x * rl.get_frame_time()
@@ -205,27 +301,33 @@ def PlayerPhysicSystem():
         playerPos.y = playerMinY
         playerVelocity.y = 0
 
+    if playerPos.x >= playerMaxX:
+        playerPos.x = playerMaxX
+    if playerPos.x <= playerMinX:
+        playerPos.x = playerMinX
+    if playerPos.z >= playerMaxZ:
+        playerPos.z = playerMaxZ
+    if playerPos.z <= playerMinZ:
+        playerPos.z = playerMinZ
+
+    FindGround()
+    FindAround()
+
 
 chunkLoad = False
 
 
 def UpdateChunk():
     global chunkLoad
-    for x in range(40):
-        for y in range(40):
-            for z in range(40):
-                try:
-                    block = chunk[x][y][z]
-                    rl.draw_cube(
-                        rl.Vector3(x + 0.5, y, z + 0.5),
-                        block.width,
-                        block.height,
-                        block.long,
-                        rl.GREEN,
-                    )
-                except:
-                    pass
-    chunkLoad = True
+    for pos, block in chunk.items():
+        x, y, z = pos
+        rl.draw_cube(
+            rl.Vector3(x + 0.5, y + 1, z + 0.5),
+            block.width,
+            block.height,
+            block.long,
+            rl.GREEN,
+        )
 
 
 rl.disable_cursor()
@@ -234,11 +336,7 @@ while not rl.window_should_close():
     rl.begin_drawing()
     rl.clear_background(rl.DARKBLUE)
     # rl.rl_clear_screen_buffers()
-    rl.draw_fps(40, 40)
-    rl.draw_text("X:" + str(math.floor(playerPos.x)), 40, 70, 30, rl.BLACK)
-    rl.draw_text("Y:" + str(math.floor(playerPos.y)), 40, 100, 30, rl.BLACK)
-    rl.draw_text("Z:" + str(math.floor(playerPos.z)), 40, 130, 30, rl.BLACK)
-    rl.draw_text("minY:" + str(playerMinY), 40, 160, 30, rl.BLACK)
+
     Gravity()
     UpdatePlayer()
     UpdateCamera()
@@ -256,5 +354,32 @@ while not rl.window_should_close():
     rl.draw_sphere(rl.Vector3(target.x, target.y, target.z), 0.05, rl.RED)
 
     rl.end_mode_3d()
+
+    rl.draw_rectangle(35, 35, 200, 300, rl.color_alpha(rl.WHITE, 0.8))
+    rl.draw_fps(40, 40)
+    rl.draw_text("X:" + str(math.floor(playerPos.x)), 40, 70, 30, rl.BLACK)
+    rl.draw_text("Y:" + str(math.floor(playerPos.y)), 40, 100, 30, rl.BLACK)
+    rl.draw_text("Z:" + str(math.floor(playerPos.z)), 40, 130, 30, rl.BLACK)
+    rl.draw_text("minY:" + str(playerMinY), 40, 160, 30, rl.BLACK)
+    rl.draw_text("minX:" + str(playerMinX), 40, 190, 30, rl.BLACK)
+    rl.draw_text("maxX:" + str(playerMaxX), 40, 220, 30, rl.BLACK)
+    rl.draw_text("minZ:" + str(playerMinZ), 40, 250, 30, rl.BLACK)
+    rl.draw_text("maxZ:" + str(playerMaxZ), 40, 280, 30, rl.BLACK)
+
+    if rl.is_key_down(rl.KeyboardKey.KEY_W):
+        rl.draw_rectangle(110 - 5, 400, 30, 30, rl.WHITE)
+        rl.draw_text("W", 110, 400, 30, rl.BLACK)
+    if rl.is_key_down(rl.KeyboardKey.KEY_A):
+        rl.draw_rectangle(80 - 5, 430, 30, 30, rl.WHITE)
+        rl.draw_text("A", 80, 430, 30, rl.BLACK)
+    if rl.is_key_down(rl.KeyboardKey.KEY_S):
+        rl.draw_rectangle(110 - 5, 430, 30, 30, rl.WHITE)
+        rl.draw_text("S", 110, 430, 30, rl.BLACK)
+    if rl.is_key_down(rl.KeyboardKey.KEY_D):
+        rl.draw_rectangle(140 - 5, 430, 30, 30, rl.WHITE)
+        rl.draw_text("D", 140, 430, 30, rl.BLACK)
+    if rl.is_key_down(rl.KeyboardKey.KEY_SPACE):
+        rl.draw_rectangle(80 - 5, 460, 120, 30, rl.WHITE)
+        rl.draw_text("SPACE", 80, 460, 30, rl.BLACK)
 
     rl.end_drawing()
