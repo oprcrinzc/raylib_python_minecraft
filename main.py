@@ -69,7 +69,7 @@ timeLastJump = 0.0
 
 
 def UpdatePlayer():
-    global target, mainCam, playerAngleY, playerAngleX
+    global target, mainCam, playerAngleY, playerAngleX, TargetBlock
     if playerAngleY > 360 or playerAngleY < -360:
         playerAngleY = 0.0
     if playerAngleX >= 87:
@@ -77,9 +77,21 @@ def UpdatePlayer():
     if playerAngleX <= -87:
         playerAngleX = -87
     Movement()
+    KeyBoard()
     PlayerPhysicSystem()
+    TargetBlock = GetTargetBlock()
     mainCam.position = playerPos
     mainCam.position.y = mainCam.position.y + 1.7
+
+
+def KeyBoard():
+    global chunk
+    nb = {}
+
+    if rl.is_mouse_button_pressed(rl.MouseButton.MOUSE_BUTTON_LEFT):
+        print("click")
+        nb = {(int(TargetBlock.x), int(TargetBlock.y), int(TargetBlock.z)): b}
+    chunk = chunk | nb
 
 
 def Movement():
@@ -290,25 +302,28 @@ def FindGround(stack: int = 0):
 def PlayerPhysicSystem():
     global playerPos, playerVelocity, playerMinY
 
+    targetPos = rl.Vector3(0, 0, 0)
     # update position
-    playerPos.x += playerVelocity.x * rl.get_frame_time()
-    playerPos.y += playerVelocity.y * rl.get_frame_time()
-    playerPos.z += playerVelocity.z * rl.get_frame_time()
+    targetPos.x = playerPos.x + playerVelocity.x * rl.get_frame_time()
+    targetPos.y = playerPos.y + playerVelocity.y * rl.get_frame_time()
+    targetPos.z = playerPos.z + playerVelocity.z * rl.get_frame_time()
 
     # if playerPos.y >= 1.7 - 0.000001 and playerPos.y <= 1.7 + 0.000001:
     #    playerPos.y = 1.7
-    if playerPos.y < playerMinY and playerPos.y != playerMinY:
-        playerPos.y = playerMinY
+    if targetPos.y < playerMinY and targetPos.y != playerMinY:
+        targetPos.y = playerMinY
         playerVelocity.y = 0
 
-    if playerPos.x >= playerMaxX:
-        playerPos.x = playerMaxX
-    if playerPos.x <= playerMinX:
-        playerPos.x = playerMinX
-    if playerPos.z >= playerMaxZ:
-        playerPos.z = playerMaxZ
-    if playerPos.z <= playerMinZ:
-        playerPos.z = playerMinZ
+    if targetPos.x >= playerMaxX:
+        targetPos.x = playerMaxX
+    if targetPos.x <= playerMinX:
+        targetPos.x = playerMinX
+    if targetPos.z >= playerMaxZ:
+        targetPos.z = playerMaxZ
+    if targetPos.z <= playerMinZ:
+        targetPos.z = playerMinZ
+
+    playerPos = targetPos
 
     FindGround()
     FindAround()
@@ -330,6 +345,21 @@ def UpdateChunk():
         )
 
 
+def GetTargetBlock() -> rl.Vector3:
+    targetBlock = rl.Vector3()
+    x = math.floor(target.x)
+    y = math.floor(target.y)
+    z = math.floor(target.z)
+    print(x, y, z)
+    targetBlock.x = x
+    targetBlock.y = y
+    targetBlock.z = z
+
+    return targetBlock
+
+
+TargetBlock = rl.Vector3()
+
 rl.disable_cursor()
 
 while not rl.window_should_close():
@@ -340,6 +370,7 @@ while not rl.window_should_close():
     Gravity()
     UpdatePlayer()
     UpdateCamera()
+    # GetTargetBlock()
     rl.begin_mode_3d(mainCam)
 
     rl.draw_grid(50, 1)
@@ -352,6 +383,13 @@ while not rl.window_should_close():
     UpdateChunk()
 
     rl.draw_sphere(rl.Vector3(target.x, target.y, target.z), 0.05, rl.RED)
+    rl.draw_cube(
+        rl.Vector3(TargetBlock.x + 0.5, TargetBlock.y + 1.0, TargetBlock.z + 0.5),
+        1.0,
+        1.0,
+        1.0,
+        rl.color_alpha(rl.WHITE, 0.7),
+    )
 
     rl.end_mode_3d()
 
